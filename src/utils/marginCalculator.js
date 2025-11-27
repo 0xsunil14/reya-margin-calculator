@@ -2,33 +2,36 @@ export class MarginCalculator {
   /**
    * Calculate PnL for a single position
    */
-  calculatePnL(position, currentPrice) {
-    const price = currentPrice || position.current_price || position.entry_price
-    const priceDiff = position.size > 0 
-      ? price - position.entry_price  // Long
-      : position.entry_price - price  // Short
+  calculatePnL(position) {
+    const currentPrice = position.currentPrice || position.current_price || position.entryPrice
+    const entryPrice = position.entryPrice || position.entry_price || 0
+    const size = position.size || 0
     
-    return priceDiff * Math.abs(position.size)
+    const priceDiff = size > 0 
+      ? currentPrice - entryPrice  // Long
+      : entryPrice - currentPrice  // Short
+    
+    return priceDiff * Math.abs(size)
   }
 
   /**
    * Calculate required margin for a position
    */
-  calculateRequiredMargin(position, currentPrice) {
-    const price = currentPrice || position.current_price || position.entry_price
-    const notional = Math.abs(position.size * price)
+  calculateRequiredMargin(position) {
+    const currentPrice = position.currentPrice || position.current_price || position.entryPrice
+    const size = position.size || 0
     const leverage = position.leverage || 1
     
+    const notional = Math.abs(size * currentPrice)
     return notional / leverage
   }
 
   /**
    * Calculate total portfolio value including unrealized PnL
    */
-  calculatePortfolioValue(collateral, positions, currentPrices = {}) {
+  calculatePortfolioValue(collateral, positions) {
     const totalPnL = positions.reduce((sum, pos) => {
-      const price = currentPrices[pos.market] || pos.current_price
-      return sum + this.calculatePnL(pos, price)
+      return sum + this.calculatePnL(pos)
     }, 0)
     
     return collateral + totalPnL
@@ -37,10 +40,9 @@ export class MarginCalculator {
   /**
    * Calculate total used margin
    */
-  calculateUsedMargin(positions, currentPrices = {}) {
+  calculateUsedMargin(positions) {
     return positions.reduce((sum, pos) => {
-      const price = currentPrices[pos.market] || pos.current_price
-      return sum + this.calculateRequiredMargin(pos, price)
+      return sum + this.calculateRequiredMargin(pos)
     }, 0)
   }
 
@@ -57,7 +59,8 @@ export class MarginCalculator {
    */
   calculateLiquidationPrice(position, totalCollateral, usedMargin) {
     const maintenanceMarginRatio = 0.03 // 3% maintenance margin
-    const { size, entry_price } = position
+    const size = position.size || 0
+    const entryPrice = position.entryPrice || position.entry_price || 0
     
     if (size === 0) return 0
     
@@ -65,8 +68,8 @@ export class MarginCalculator {
     const priceMove = (availableMargin * (1 - maintenanceMarginRatio)) / Math.abs(size)
     
     return size > 0 
-      ? Math.max(0, entry_price - priceMove)  // Long
-      : entry_price + priceMove  // Short
+      ? Math.max(0, entryPrice - priceMove)  // Long
+      : entryPrice + priceMove  // Short
   }
 
   /**
@@ -88,13 +91,14 @@ export class MarginCalculator {
   /**
    * Calculate cross-margin hedging benefits
    */
-  calculateHedgingBenefit(positions, currentPrices = {}) {
+  calculateHedgingBenefit(positions) {
     const exposureByAsset = {}
     
     positions.forEach(pos => {
-      const asset = pos.asset || pos.market?.split('-')[0]
-      const price = currentPrices[pos.market] || pos.current_price
-      const exposure = pos.size * price
+      const asset = pos.asset || pos.market?.split('-')[0] || 'UNKNOWN'
+      const currentPrice = pos.currentPrice || pos.current_price || pos.entryPrice || 0
+      const size = pos.size || 0
+      const exposure = size * currentPrice
       
       exposureByAsset[asset] = (exposureByAsset[asset] || 0) + exposure
     })

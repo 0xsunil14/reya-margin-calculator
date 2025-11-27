@@ -20,7 +20,9 @@ export default function PositionsList({ positions, onUpdatePrice, onRemove }) {
           <BarChart3 className="w-5 h-5 text-blue-400" />
           <h3 className="text-lg font-semibold">Active Positions</h3>
         </div>
-        <span className="text-sm text-slate-400">{positions.length} position{positions.length !== 1 ? 's' : ''}</span>
+        <span className="text-sm text-slate-400">
+          {positions.length} position{positions.length !== 1 ? 's' : ''}
+        </span>
       </div>
       
       <div className="space-y-3">
@@ -28,7 +30,9 @@ export default function PositionsList({ positions, onUpdatePrice, onRemove }) {
           const pnl = marginCalculator.calculatePnL(position)
           const requiredMargin = marginCalculator.calculateRequiredMargin(position)
           const liqPrice = marginCalculator.calculateLiquidationPrice(position, 0, 0)
-          const pnlPercent = ((pnl / requiredMargin) * 100).toFixed(2)
+          const pnlPercent = requiredMargin > 0 
+            ? ((pnl / requiredMargin) * 100).toFixed(2)
+            : '0.00'
           
           return (
             <div 
@@ -67,12 +71,16 @@ export default function PositionsList({ positions, onUpdatePrice, onRemove }) {
               <div className="grid grid-cols-2 gap-3 text-sm mb-3">
                 <div>
                   <span className="text-slate-400">Size:</span>
-                  <span className="ml-2 font-medium">{position.size} {position.asset}</span>
+                  <span className="ml-2 font-medium">
+                    {position.size} {position.asset}
+                  </span>
                 </div>
                 
                 <div>
                   <span className="text-slate-400">Entry:</span>
-                  <span className="ml-2 font-medium">${position.entryPrice.toLocaleString()}</span>
+                  <span className="ml-2 font-medium">
+                    ${position.entryPrice.toLocaleString()}
+                  </span>
                 </div>
                 
                 <div>
@@ -80,7 +88,7 @@ export default function PositionsList({ positions, onUpdatePrice, onRemove }) {
                   <input
                     type="number"
                     value={position.currentPrice}
-                    onChange={(e) => onUpdatePrice(position.id, parseFloat(e.target.value) || position.currentPrice)}
+                    onChange={(e) => onUpdatePrice(position.id, e.target.value)}
                     className="ml-2 w-28 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm focus:border-blue-500 focus:outline-none"
                     step="0.01"
                   />
@@ -88,7 +96,9 @@ export default function PositionsList({ positions, onUpdatePrice, onRemove }) {
                 
                 <div>
                   <span className="text-slate-400">Liq Price:</span>
-                  <span className="ml-2 font-medium text-red-400">${liqPrice.toFixed(2)}</span>
+                  <span className="ml-2 font-medium text-red-400">
+                    ${liqPrice > 0 ? liqPrice.toFixed(2) : 'N/A'}
+                  </span>
                 </div>
               </div>
               
