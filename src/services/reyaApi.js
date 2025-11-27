@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const REYA_API_BASE = 'https://api.reya.network/v2'
+const REYA_API_BASE = 'https://api.reya.xyz/v2'
 
 class ReyaAPI {
   constructor() {

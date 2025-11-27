@@ -10,7 +10,7 @@ import { walletConnect, injected, coinbaseWallet } from 'wagmi/connectors'
 import { reyaNetwork } from './config/chains'
 
 // Get projectId from https://cloud.walletconnect.com
-const projectId = 'YOUR_WALLETCONNECT_PROJECT_ID'
+const projectId = '8d571b3db0f71c579842481c98e50dbd'
 
 // Create wagmiConfig
 const wagmiConfig = createConfig({
