@@ -1,15 +1,19 @@
+// src/utils/marginCalculator.js - FIXED VERSION
+
 export class MarginCalculator {
   /**
    * Calculate PnL for a single position
+   * Handles both camelCase and snake_case field names
    */
   calculatePnL(position) {
-    const currentPrice = position.currentPrice || position.current_price || position.entryPrice
+    const currentPrice = position.currentPrice || position.current_price || position.entryPrice || 0
     const entryPrice = position.entryPrice || position.entry_price || 0
     const size = position.size || 0
     
-    const priceDiff = size > 0 
-      ? currentPrice - entryPrice  // Long
-      : entryPrice - currentPrice  // Short
+    // Calculate price difference based on position type
+    const priceDiff = (position.type === 'Long' || size > 0)
+      ? currentPrice - entryPrice  // Long position
+      : entryPrice - currentPrice  // Short position
     
     return priceDiff * Math.abs(size)
   }
@@ -18,12 +22,12 @@ export class MarginCalculator {
    * Calculate required margin for a position
    */
   calculateRequiredMargin(position) {
-    const currentPrice = position.currentPrice || position.current_price || position.entryPrice
-    const size = position.size || 0
+    const currentPrice = position.currentPrice || position.current_price || position.entryPrice || 0
+    const size = Math.abs(position.size || 0)
     const leverage = position.leverage || 1
     
-    const notional = Math.abs(size * currentPrice)
-    return notional / leverage
+    const notional = size * currentPrice
+    return leverage > 0 ? notional / leverage : notional
   }
 
   /**
@@ -38,7 +42,7 @@ export class MarginCalculator {
   }
 
   /**
-   * Calculate total used margin
+   * Calculate total used margin across all positions
    */
   calculateUsedMargin(positions) {
     return positions.reduce((sum, pos) => {
@@ -51,7 +55,15 @@ export class MarginCalculator {
    */
   calculateMarginUtilization(usedMargin, accountValue) {
     if (accountValue <= 0) return 0
-    return (usedMargin / accountValue) * 100
+    const utilization = (usedMargin / accountValue) * 100
+    return Math.min(utilization, 100) // Cap at 100%
+  }
+
+  /**
+   * Calculate available margin for new positions
+   */
+  calculateAvailableMargin(accountValue, usedMargin) {
+    return Math.max(0, accountValue - usedMargin)
   }
 
   /**
@@ -61,31 +73,51 @@ export class MarginCalculator {
     const maintenanceMarginRatio = 0.03 // 3% maintenance margin
     const size = position.size || 0
     const entryPrice = position.entryPrice || position.entry_price || 0
+    const leverage = position.leverage || 1
     
-    if (size === 0) return 0
+    if (size === 0 || entryPrice === 0) return 0
     
-    const availableMargin = totalCollateral - usedMargin
-    const priceMove = (availableMargin * (1 - maintenanceMarginRatio)) / Math.abs(size)
+    // Calculate liquidation price based on position type
+    const maintenanceMargin = (Math.abs(size) * entryPrice * maintenanceMarginRatio)
+    const initialMargin = (Math.abs(size) * entryPrice) / leverage
+    const buffer = initialMargin - maintenanceMargin
+    const priceMove = buffer / Math.abs(size)
     
-    return size > 0 
-      ? Math.max(0, entryPrice - priceMove)  // Long
-      : entryPrice + priceMove  // Short
+    if (size > 0) {
+      // Long position: liquidation when price drops
+      return Math.max(0, entryPrice - priceMove)
+    } else {
+      // Short position: liquidation when price rises
+      return entryPrice + priceMove
+    }
   }
 
   /**
    * Get risk level based on margin utilization
    */
   getRiskLevel(utilizationPercent) {
-    if (utilizationPercent >= 80) return { level: 'High', color: 'red', severity: 3 }
-    if (utilizationPercent >= 60) return { level: 'Medium', color: 'yellow', severity: 2 }
-    return { level: 'Low', color: 'green', severity: 1 }
-  }
-
-  /**
-   * Calculate available margin for new positions
-   */
-  calculateAvailableMargin(accountValue, usedMargin) {
-    return Math.max(0, accountValue - usedMargin)
+    if (utilizationPercent >= 80) {
+      return { 
+        level: 'High', 
+        color: 'red', 
+        severity: 3,
+        message: 'Critical - Close to liquidation'
+      }
+    }
+    if (utilizationPercent >= 60) {
+      return { 
+        level: 'Medium', 
+        color: 'yellow', 
+        severity: 2,
+        message: 'Warning - Monitor positions'
+      }
+    }
+    return { 
+      level: 'Low', 
+      color: 'green', 
+      severity: 1,
+      message: 'Healthy margin'
+    }
   }
 
   /**
@@ -117,7 +149,30 @@ export class MarginCalculator {
       totalExposure,
       netExposure,
       hedgingBenefit,
-      benefitPercent: Math.round(benefitPercent * 100) / 100
+      benefitPercent: Math.round(benefitPercent * 100) / 100,
+      exposureByAsset
+    }
+  }
+
+  /**
+   * Calculate portfolio statistics
+   */
+  calculatePortfolioStats(positions, collateral) {
+    const totalPnL = positions.reduce((sum, pos) => sum + this.calculatePnL(pos), 0)
+    const usedMargin = this.calculateUsedMargin(positions)
+    const accountValue = collateral + totalPnL
+    const availableMargin = this.calculateAvailableMargin(accountValue, usedMargin)
+    const utilization = this.calculateMarginUtilization(usedMargin, accountValue)
+    const riskLevel = this.getRiskLevel(utilization)
+    
+    return {
+      totalPnL,
+      usedMargin,
+      accountValue,
+      availableMargin,
+      utilization,
+      riskLevel,
+      positionCount: positions.length
     }
   }
 }

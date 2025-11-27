@@ -9,6 +9,7 @@ import WhatIfSimulator from './WhatIfSimulator'
 import AlertSettings from './AlertSettings'
 import marginCalculator from '../utils/marginCalculator'
 import reyaApi from '../services/reyaApi'
+import { useMarginNotifications } from '../hooks/useMarginNotifications'
 
 export default function MarginDashboard() {
   const { address, isConnected } = useAccount()
@@ -42,10 +43,25 @@ export default function MarginDashboard() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
+  // Calculate portfolio metrics
+  const totalPnL = positions.reduce((sum, pos) => {
+    return sum + marginCalculator.calculatePnL(pos)
+  }, 0)
+
+  const totalUsedMargin = positions.reduce((sum, pos) => {
+    return sum + marginCalculator.calculateRequiredMargin(pos)
+  }, 0)
+
+  const accountValue = collateral + totalPnL
+  const utilization = marginCalculator.calculateMarginUtilization(totalUsedMargin, accountValue)
+  const availableMargin = marginCalculator.calculateAvailableMargin(accountValue, totalUsedMargin)
+
+  // 🔔 Enable browser notifications
+  useMarginNotifications(utilization, availableMargin)
+
   // Load Reya data from API
   const loadReyaData = async () => {
     if (!isConnected || !address) {
-      // Keep demo data when not connected
       return
     }
 
@@ -77,7 +93,6 @@ export default function MarginDashboard() {
       const mappedPositions = []
       if (Array.isArray(positionsFromApi) && positionsFromApi.length > 0) {
         positionsFromApi.forEach((apiPos, idx) => {
-          // Find matching market for current price
           const market = markets.find(m => 
             m.symbol === apiPos.symbol || 
             m.symbol === apiPos.market
@@ -100,7 +115,6 @@ export default function MarginDashboard() {
         })
       }
 
-      // Update state with real data
       if (totalCollateral > 0) {
         setCollateral(totalCollateral)
       }
@@ -109,40 +123,19 @@ export default function MarginDashboard() {
         setPositions(mappedPositions)
       }
 
-      console.log('✅ Loaded Reya data:', {
-        accounts: accounts?.length || 0,
-        positions: mappedPositions.length,
-        collateral: totalCollateral
-      })
-
     } catch (err) {
       console.error('Failed to load Reya data:', err)
       setError('Failed to load live data from Reya. Using demo data.')
-      // Keep demo data on error
     } finally {
       setLoading(false)
     }
   }
 
-  // Load when wallet connects
   useEffect(() => {
     if (isConnected && address) {
       loadReyaData()
     }
   }, [isConnected, address])
-
-  // Calculate portfolio metrics
-  const totalPnL = positions.reduce((sum, pos) => {
-    return sum + marginCalculator.calculatePnL(pos)
-  }, 0)
-
-  const totalUsedMargin = positions.reduce((sum, pos) => {
-    return sum + marginCalculator.calculateRequiredMargin(pos)
-  }, 0)
-
-  const accountValue = collateral + totalPnL
-  const utilization = marginCalculator.calculateMarginUtilization(totalUsedMargin, accountValue)
-  const availableMargin = marginCalculator.calculateAvailableMargin(accountValue, totalUsedMargin)
 
   // Handlers
   const updatePrice = (id, newPrice) => {
@@ -290,7 +283,6 @@ function AddPositionForm({ onAdd, onCancel }) {
   const updateField = (field, value) => {
     setFormData(prev => {
       const updated = { ...prev, [field]: value }
-      // Sync currentPrice with entryPrice when entry changes
       if (field === 'entryPrice') {
         updated.currentPrice = value
       }
@@ -304,7 +296,6 @@ function AddPositionForm({ onAdd, onCancel }) {
 
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-2 gap-4">
-          {/* Exchange */}
           <div>
             <label className="text-sm text-slate-400 mb-1 block">Exchange</label>
             <select
@@ -318,7 +309,6 @@ function AddPositionForm({ onAdd, onCancel }) {
             </select>
           </div>
 
-          {/* Asset */}
           <div>
             <label className="text-sm text-slate-400 mb-1 block">Asset</label>
             <select
@@ -334,7 +324,6 @@ function AddPositionForm({ onAdd, onCancel }) {
             </select>
           </div>
 
-          {/* Type */}
           <div>
             <label className="text-sm text-slate-400 mb-1 block">Type</label>
             <select
@@ -347,7 +336,6 @@ function AddPositionForm({ onAdd, onCancel }) {
             </select>
           </div>
 
-          {/* Leverage */}
           <div>
             <label className="text-sm text-slate-400 mb-1 block">Leverage</label>
             <input
@@ -360,7 +348,6 @@ function AddPositionForm({ onAdd, onCancel }) {
             />
           </div>
 
-          {/* Size */}
           <div>
             <label className="text-sm text-slate-400 mb-1 block">Size</label>
             <input
@@ -373,7 +360,6 @@ function AddPositionForm({ onAdd, onCancel }) {
             />
           </div>
 
-          {/* Entry Price */}
           <div>
             <label className="text-sm text-slate-400 mb-1 block">Entry Price</label>
             <input
